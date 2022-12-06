@@ -8,10 +8,11 @@
 //#define DHTTYPE DHT22   // DHT 22  (AM2302), AM2321
 
 // Change the credentials below, so your ESP8266 connects to your router
-const char* ssid = "-----------";
-const char* password = "--------";
+const char* ssid = "-------------";
+const char* password = "----------";
 
-const char* mqtt_server = "-------------";
+// Change the variable to your Raspberry Pi IP address, so it connects to your MQTT broker
+const char* mqtt_server = "----------------";
 
 // Emulate Serial1 on pins 6/7 if not present
 #ifndef HAVE_HWSERIAL1
@@ -29,7 +30,7 @@ const int DHTPin = 8;
 
 // Lamp - LED - GPIO 4 = D2 on ESP-12E NodeMCU board
 //const int lamp = 4;
-#define lamp 4
+//#define lamp 4
 
 int Water_sensor_level;
 
@@ -38,9 +39,9 @@ int Motion_sensor = 0;
 
 #define SIGNAL_PIN A5
 
-#define SENSOR_MIN 333
+#define SENSOR_MIN 200
 
-#define SENSOR_MAX 543
+#define SENSOR_MAX 560
 
 int value = 0; // variable to store the sensor value
 int level = 0; // variable to store the water level
@@ -49,6 +50,9 @@ const int MOTION_SENSOR_PIN = 11;   // Arduino pin connected to the OUTPUT pin o
 int motionStateCurrent      = LOW; // current  state of motion sensor's pin
 int motionStatePrevious     = LOW; // previous state of motion sensor's pin
 
+
+
+#define water_pump A1
 
 // Initialize DHT sensor.
 DHT dht(DHTPin, DHTTYPE);
@@ -91,7 +95,7 @@ void callback(char* topic, byte* message, unsigned int length) {
   //Serial.println();
   // Feel free to add more if statements to control more GPIOs with MQTT
 
-  // If a message is received on the topic room/lamp, you check if the message is either on or off. Turns the lamp GPIO according to the message
+  ;/*// If a message is received on the topic room/lamp, you check if the message is either on or off. Turns the lamp GPIO according to the message
   if(strcmp(topic, "room/lamp")==0){
       Serial.print("Changing Room lamp to ");
       if(messageTemp == "on"){
@@ -100,6 +104,17 @@ void callback(char* topic, byte* message, unsigned int length) {
       }
       else if(messageTemp == "off"){
         digitalWrite(lamp, LOW);
+        Serial.println("off");
+      }
+  }*/
+  if(strcmp(topic, "esp/pump")==0){
+    Serial.print("Changing Water pump to ");
+      if(messageTemp == "on"){
+        digitalWrite(water_pump, LOW);
+        Serial.println("on");
+      }
+      else if(messageTemp == "off"){
+        digitalWrite(water_pump, HIGH);
         Serial.println("off");
       }
   }
@@ -129,6 +144,7 @@ void reconnect() {
       // Subscribe or resubscribe to a topic
       // You can subscribe to more topics (to control more LEDs in this example)
       client.subscribe("room/lamp");
+      client.subscribe("esp/pump");
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -143,7 +159,7 @@ void reconnect() {
 // Sets your mqtt broker and sets the callback function
 // The callback function is what receives messages and actually controls the LEDs
 void setup() {
-  pinMode(lamp, OUTPUT);
+  //pinMode(lamp, OUTPUT);
   
   dht.begin();
   pinMode(MOTION_SENSOR_PIN, INPUT);
@@ -157,6 +173,8 @@ void setup() {
   setup_wifi();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
+  digitalWrite(water_pump, HIGH);
+  pinMode(water_pump, OUTPUT);
 
 }
 
@@ -181,6 +199,9 @@ void loop() {
     if(level < 0){
       level = 0;
     }
+    else if(level > 4){
+      level  = 4;
+    }
     static char waterLevel[7];
     dtostrf(level, 6, 0, waterLevel);
     delay(1000);
@@ -192,15 +213,11 @@ void loop() {
 
     if (motionStatePrevious == LOW && motionStateCurrent == HIGH) { // pin state change: LOW -> HIGH
       Serial.println("Motion detected!");
-      //digitalWrite(LED_PIN, HIGH); // turn on
-      //client.publish("esp/motion", "Detectada");
       Motion_sensor = 1;
     }
     else
     if (motionStatePrevious == HIGH && motionStateCurrent == LOW) { // pin state change: HIGH -> LOW
       Serial.println("Motion stopped!");
-      //digitalWrite(LED_PIN, LOW);  // turn off
-      //client.publish("esp/motion", "Não detectada");
       Motion_sensor = 0;
     }
     dtostrf(Motion_sensor, 6, 0, motionState);
@@ -227,6 +244,14 @@ void loop() {
     // float hif = dht.computeHeatIndex(f, h);
     // static char temperatureTemp[7];
     // dtostrf(hif, 6, 2, temperatureTemp);
+
+     if(level < 2){
+      //Serial.println("Water Pump: on");
+      digitalWrite(water_pump, LOW);
+      delay(10000);
+      //Serial.println("Water Pump: off");
+      digitalWrite(water_pump, HIGH);
+    }
     
     static char humidityTemp[7];
     dtostrf(h, 6, 2, humidityTemp);
@@ -254,7 +279,5 @@ void loop() {
     Serial.print(" *C ");
     Serial.print("Water Level (Value): ");
     Serial.println(value);
-    // Serial.print(hif);
-    // Serial.println(" *F");
   }
 }
